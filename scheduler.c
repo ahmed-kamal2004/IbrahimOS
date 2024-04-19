@@ -8,55 +8,64 @@
 #include <stdio.h>
 #include <unistd.h>
 
+struct message{
+    int id;
+    int arrTime;
+    int RunTime;
+    int Priority;
+};
 struct msgbuff
 {
     long mtype;
-    int message;
+    struct message msg;
 };
+
 
 int main(int argc, char * argv[])
 {
-    // initClk();
-    
+
+
+    // try semaphore
 
 
 
-    key_t key_id_ID,key_id_Arr,key_id_Run,key_id_Pri;
-    int msgq_id_ID,msgq_id_Arr,msgq_id_Run,msgq_id_Pri;
-    int send_val_id,send_val_arr,send_val_pri,send_val_run;
 
 
-
-    key_id_ID = ftok("keyfile_id", 65);
-    key_id_Arr = ftok("keyfile_arr", 65);
-    key_id_Pri = ftok("keyfile_pri", 65);
-    key_id_Run = ftok("keyfile_run", 65);
+    initClk();
 
 
-    msgq_id_ID= msgget(key_id_ID, 0666 | IPC_CREAT );
-        msgq_id_Arr= msgget(key_id_Arr, 0666 | IPC_CREAT );
-            msgq_id_Pri= msgget(key_id_Pri, 0666 | IPC_CREAT );
-                msgq_id_Run= msgget(key_id_Run, 0666 | IPC_CREAT );
+    printf("Scheduler : %d\n\n",getpid());
+
+    int num_of_process = 0;
+
+    key_t key_id;
+    int msgq_id;
+    int rec_val;
+
+    key_id= ftok("keyFile", 65);
 
 
+    msgq_id= msgget(key_id, 0666 | IPC_CREAT );
 
-    struct msgbuff message_id;
-        struct msgbuff message_arr;
-            struct msgbuff message_run;
-                struct msgbuff message_pri;
 
-    message_id.mtype = 7;
-    message_arr.mtype = 7;
-    message_pri.mtype = 7;
-    message_run.mtype = 7;
-    /* 0 -> receive all types of messages */
-    for(int i =0;i<10;i++){
-        msgrcv(msgq_id_ID, &message_id, sizeof(message_id.message), 0,!IPC_NOWAIT );
-                msgrcv(msgq_id_Arr, &message_arr, sizeof(message_arr.message), 0,!IPC_NOWAIT );
-                        msgrcv(msgq_id_Pri, &message_pri, sizeof(message_pri.message), 0,!IPC_NOWAIT );
-                                msgrcv(msgq_id_Run, &message_run, sizeof(message_run.message), 0,!IPC_NOWAIT );
+    struct msgbuff msg;
 
-                                printf("SCH %d %d %d %d\n",message_id.message,message_arr.message,message_run.message,message_pri.message);
+    msg.mtype = 7;
+
+    struct msqid_ds ctrl_status_ds;
+
+    while(num_of_process < 10){
+        msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
+        while(ctrl_status_ds.__msg_cbytes){
+            rec_val=msgrcv(msgq_id, &msg, sizeof(msg.msg), 0,IPC_NOWAIT );
+            if(rec_val != -1)
+            {
+                num_of_process++;
+                printf("SCH %d %d %d %d  Time %d\n",msg.msg.id,msg.msg.arrTime,msg.msg.RunTime,msg.msg.Priority,getClk());
+            }
+            msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
+        }
+        
     }
 
 

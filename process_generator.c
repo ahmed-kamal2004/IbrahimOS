@@ -9,7 +9,10 @@
 #include <unistd.h>
 
 #define PROCESS_FILE "processes.txt"
-int msgq_id_ID, msgq_id_Arr, msgq_id_Run, msgq_id_Pri;
+
+int msgq_id;
+struct PCB *head = NULL;
+
 struct PCB
 {
     int id;
@@ -19,11 +22,19 @@ struct PCB
     struct PCB *next;
 };
 
+struct message{
+    int id;
+    int arrTime;
+    int RunTime;
+    int Priority;
+};
 struct msgbuff
 {
     long mtype;
-    int message;
+    struct message msg;
 };
+
+
 
 void clearResources(int);
 struct PCB *PCB_init(int, int, int, int);
@@ -31,55 +42,32 @@ struct PCB *PCB_add(struct PCB *, struct PCB *);
 struct PCB *PCB_remove(struct PCB *);
 int PCB_length(struct PCB *);
 void PCB_printer(struct PCB *);
+struct PCB*File_Reader();
+void Sch_algorithm(char [],int*);
+
+
 
 int main(int argc, char *argv[])
 {
     signal(SIGINT, clearResources);
-    // Variables
-    struct PCB *head = NULL;
-    int arrvial_time, id, runtime, priority;
-    char file_buffer[512];
-    // TODO Initialization
 
     // 1. Read the input files.
     /*
         Source : https://www.programiz.com/c-programming/c-file-input-output
         Source : https://stackoverflow.com/questions/5827931/c-reading-a-multiline-text-file
     */
-    FILE *fptr;
-    fptr = fopen(PROCESS_FILE, "r");
-    if (fptr == NULL)
-    {
-        printf("File doesn't exist");
-        perror("File Doesn't exist");
-        exit(1);
-    }
-    char line[512];
-    while (fgets(line, 512, fptr) != NULL)
-    {
-        char output = sscanf(line, "%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority);
-        if (output == 0)
-        {
-            continue;
-        }
-        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority);
-        head = PCB_add(head, new_struct);
-    }
-    fclose(fptr);
+
+    head = File_Reader();
+    PCB_printer(head);
+
 
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.   DONE
     char sch_alg[10];
     int quantum = 0;
-    while (strcmp(sch_alg, "RR") && strcmp(sch_alg, "SRTN") && strcmp(sch_alg, "HPF"))
-    {
-        printf("Choose Scheduling algorithm  RR | SRTN | HPF\n");
-        scanf("%s", sch_alg);
-    }
-    if (!strcmp(sch_alg, "RR"))
-    {
-        printf("Enter Quantum for RR \n   ");
-        scanf("%d", &quantum);
-    }
+    Sch_algorithm(sch_alg,&quantum);
+
+
+
 
     // 3. Initiate and create the scheduler and clock processes.  DONE
     int clk_pid, sch_pid;
@@ -89,96 +77,87 @@ int main(int argc, char *argv[])
         perror("error in clk fork");
         exit(-1);
     }
-    else if (clk_pid == 0)
+    if (clk_pid == 0)
     {
         execl("clk.out", "clk.out", NULL);
     }
-    else
+    sch_pid = fork();
+    printf("Sch_pid : %d\n",sch_pid);
+    if (sch_pid == -1)
     {
-        sch_pid = fork();
-        if (sch_pid == -1)
-        {
             perror("error in schedular fork");
             exit(-1);
-        }
-        else if (sch_pid == 0)
-        {
-            execl("scheduler.out", "scheduler.out", sch_alg, quantum, NULL); // sch_alg as argument to the code // 0 as a quantum for rr , 0 else
-        }
+    }
+    if (sch_pid == 0)
+    {
+        printf("scheduler.out\n");
+        execl("scheduler.out", "scheduler.out", sch_alg, quantum, NULL); // sch_alg as argument to the code // 0 as a quantum for rr , 0 else
     }
 
-    key_t key_id_ID, key_id_Arr, key_id_Run, key_id_Pri;
+    printf("Generator : %d\n\n",getpid());
 
-    int send_val_id, send_val_arr, send_val_pri, send_val_run;
+    // 4 - sending the number of processes
 
-    key_id_ID = ftok("keyfile_id", 65);
-    key_id_Arr = ftok("keyfile_arr", 65);
-    key_id_Pri = ftok("keyfile_pri", 65);
-    key_id_Run = ftok("keyfile_run", 65);
+    initClk();
 
-    msgq_id_ID = msgget(key_id_ID, 0666 | IPC_CREAT);
-    msgq_id_Arr = msgget(key_id_Arr, 0666 | IPC_CREAT);
-    msgq_id_Pri = msgget(key_id_Pri, 0666 | IPC_CREAT);
-    msgq_id_Run = msgget(key_id_Run, 0666 | IPC_CREAT);
+    key_t key_id;
 
-    if (msgq_id_ID == -1 || msgq_id_Run == -1 || msgq_id_Pri == -1 || msgq_id_Arr == -1)
+    int send_val;
+
+    key_id = ftok("keyFile", 65);
+
+
+    msgq_id= msgget(key_id, 0666 | IPC_CREAT);
+
+    struct msqid_ds ctrl_status_ds;
+    msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
+    ctrl_status_ds.msg_qbytes *= 4;
+    msgctl(msgq_id,IPC_SET,&ctrl_status_ds);
+
+
+    if (msgq_id == -1)
     {
         perror("Error in create");
         exit(-1);
     }
-    struct msgbuff message_id;
-    struct msgbuff message_arr;
-    struct msgbuff message_run;
-    struct msgbuff message_pri;
+    struct msgbuff msg;
 
-    message_id.mtype = 7;
-    message_arr.mtype = 7;
-    message_pri.mtype = 7;
-    message_run.mtype = 7;
+    msg.mtype = 7;
 
-    initClk();
     while (PCB_length(head))
     {
-        while (head  != NULL && getClk() >= head->arrTime)
+        while (head  != NULL && getClk() == head->arrTime)
         {
-            printf("current time is %d\n", getClk());
-            message_id.message = head->id;
-            message_arr.message = head->arrTime;
-            message_pri.message = head->priority;
-            message_run.message = head->runtime;
-
-            send_val_id = msgsnd(msgq_id_ID, &message_id, sizeof(message_id.message), IPC_NOWAIT);
-            send_val_arr = msgsnd(msgq_id_Arr, &message_arr, sizeof(message_arr.message), IPC_NOWAIT);
-            send_val_pri = msgsnd(msgq_id_Pri, &message_pri, sizeof(message_pri.message), IPC_NOWAIT);
-            send_val_run = msgsnd(msgq_id_Run, &message_run, sizeof(message_run.message), IPC_NOWAIT);
-
-            if (send_val_arr == -1 || send_val_id == -1 || send_val_pri == -1 || send_val_run == -1)
+            msg.msg.id = head->id;
+            msg.msg.arrTime = head->arrTime;
+            msg.msg.Priority = head->priority;
+            msg.msg.RunTime = head->runtime;
+            send_val= msgsnd(msgq_id, &msg, sizeof(msg.msg), IPC_NOWAIT);
+            if (send_val == -1 )
             {
                 perror("Error in send");
             }
-
             head = PCB_remove(head);
             printf("\n");
+            printf("current time is %d %d\n", getClk(),PCB_length(head));
         }
     }
-
     int status;
-    waitpid(sch_pid, &status, 0);
+    wait(&status);
+    msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
     destroyClk(true);
+    exit(1);
 }
 
 void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
-
-    // should removes all message queues
-    msgctl(msgq_id_Arr, IPC_RMID, (struct msqid_ds *)0);
-    msgctl(msgq_id_ID, IPC_RMID, (struct msqid_ds *)0);
-    msgctl(msgq_id_Pri, IPC_RMID, (struct msqid_ds *)0);
-    msgctl(msgq_id_Run, IPC_RMID, (struct msqid_ds *)0);
-    exit(1);
+    msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
+    while(PCB_remove(head));
+    destroyClk(true);
+    raise(SIGKILL);
+    exit(-1);
 }
-
 struct PCB *PCB_init(int id, int arrivalTime, int Runtime, int Prority)
 {
     struct PCB *new_pcb = malloc(sizeof(struct PCB) * 2);
@@ -228,5 +207,45 @@ void PCB_printer(struct PCB *head)
         printf("%d %d %d %d \n", looper->id, looper->arrTime, looper->runtime, looper->priority);
         looper = looper->next;
     }
+    printf("NULL\n");
     return;
+}
+struct PCB* File_Reader(){
+
+    struct PCB *head = NULL;
+    FILE *fptr;
+    int arrvial_time, id, runtime, priority;
+    char file_buffer[512];
+    fptr = fopen(PROCESS_FILE, "r");
+    if (fptr == NULL)
+    {
+        printf("File doesn't exist");
+        perror("File Doesn't exist");
+        exit(1);
+    }
+    char line[512];
+    while (fgets(line, 512, fptr) != NULL)
+    {
+        char output = sscanf(line, "%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority);
+        if (output == 0)
+        {
+            continue;
+        }
+        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority);
+        head = PCB_add(head, new_struct);
+    }
+    fclose(fptr);
+    return head;
+}
+void Sch_algorithm(char sch_alg[],int* quantum){
+    while (strcmp(sch_alg, "RR") && strcmp(sch_alg, "SRTN") && strcmp(sch_alg, "HPF"))
+    {
+        printf("Choose Scheduling algorithm  RR | SRTN | HPF\n");
+        scanf("%s", sch_alg);
+    }
+    if (!strcmp(sch_alg, "RR"))
+    {
+        printf("Enter Quantum for RR \n   ");
+        scanf("%d", quantum);
+    }
 }
