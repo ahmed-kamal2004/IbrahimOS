@@ -19,6 +19,7 @@ struct PCB
     int arrTime;
     int priority;
     int runtime;
+    pid_t pid;
     struct PCB *next;
 };
 
@@ -27,7 +28,9 @@ struct message{
     int arrTime;
     int RunTime;
     int Priority;
+    pid_t pid;
 };
+
 struct msgbuff
 {
     long mtype;
@@ -248,4 +251,14 @@ void Sch_algorithm(char sch_alg[],int* quantum){
         printf("Enter Quantum for RR \n   ");
         scanf("%d", quantum);
     }
+    else if(!strcmp(sch_alg, "SRTN"))
+    {
+        printf("Enter Quantum for SRTN \n   ");
+        scanf("%d", quantum);
+    }
+    else{
+        printf("Enter Quantum for HPF \n   ");
+        scanf("%d", quantum);
+    }
+
 }
