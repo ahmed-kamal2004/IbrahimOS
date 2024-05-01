@@ -2,19 +2,20 @@
 
 /* Modify this file as needed*/
 int remainingtime;
-
+void synchornize(){
+    remainingtime--;
+}
 int main(int agrc, char * argv[])
 {
+    remainingtime = atoi(argv[1]);
     initClk();
-    
-    //TODO it needs to get the remaining time from somewhere
-    //remainingtime = ??;
-    while (remainingtime > 0)
-    {
-        // remainingtime = ??;
-    }
-    
+    signal(SIGUSR1,synchornize);
+    kill(getppid(),SIGCONT);
+
+    while (remainingtime > 0);
+
     destroyClk(false);
-    
+    kill(getppid(),SIGUSR1);
+    raise(SIGKILL);
     return 0;
 }

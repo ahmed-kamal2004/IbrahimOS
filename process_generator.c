@@ -58,7 +58,6 @@ int main(int argc, char *argv[])
     */
 
     head = File_Reader();
-    PCB_printer(head);
 
 
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.   DONE
@@ -82,24 +81,27 @@ int main(int argc, char *argv[])
         execl("clk.out", "clk.out", NULL);
     }
     sch_pid = fork();
-    printf("Sch_pid : %d\n",sch_pid);
     if (sch_pid == -1)
     {
             perror("error in schedular fork");
             exit(-1);
     }
     if (sch_pid == 0)
-    {
-        printf("scheduler.out\n");
-        execl("scheduler.out", "scheduler.out", sch_alg, quantum, NULL); // sch_alg as argument to the code // 0 as a quantum for rr , 0 else
-    }
-
-    printf("Generator : %d\n\n",getpid());
+    {   
+        char qunat [32];
+        char num_of_process[32];     
+        sprintf(num_of_process,"%d",PCB_length(head));
+        if(strcmp(sch_alg,"RR")==0){
+            sprintf(qunat,"%d",quantum);
+            execl("scheduler.out", "scheduler.out", sch_alg,num_of_process,qunat, NULL);
+        }
+      else
+        {  
+            execl("scheduler.out", "scheduler.out", sch_alg, num_of_process,NULL);
+        } // sch_alg as argument to the code // 0 as a quantum for rr , 0 else
+        }
 
     // 4 - sending the number of processes
-
-    initClk();
-
     key_t key_id;
 
     int send_val;
@@ -124,6 +126,9 @@ int main(int argc, char *argv[])
 
     msg.mtype = 7;
 
+    initClk();
+
+
     while (PCB_length(head))
     {
         while (head  != NULL && getClk() == head->arrTime)
@@ -138,8 +143,6 @@ int main(int argc, char *argv[])
                 perror("Error in send");
             }
             head = PCB_remove(head);
-            printf("\n");
-            printf("current time is %d %d\n", getClk(),PCB_length(head));
         }
     }
     int status;
@@ -153,7 +156,7 @@ void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
     msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
-    while(PCB_remove(head));
+    //while(PCB_remove(head));
     destroyClk(true);
     raise(SIGKILL);
     exit(-1);
@@ -245,7 +248,7 @@ void Sch_algorithm(char sch_alg[],int* quantum){
     }
     if (!strcmp(sch_alg, "RR"))
     {
-        printf("Enter Quantum for RR \n   ");
+        printf("Enter Quantum for RR \n");
         scanf("%d", quantum);
     }
 }
