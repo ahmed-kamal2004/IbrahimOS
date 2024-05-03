@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
             msg.msg.arrTime = head->arrTime;
             msg.msg.Priority = head->priority;
             msg.msg.RunTime = head->runtime;
-            send_val= msgsnd(msgq_id, &msg, sizeof(msg.msg), IPC_NOWAIT);
+            send_val= msgsnd(msgq_id, &msg, sizeof(msg.msg), !IPC_NOWAIT);
             if (send_val == -1 )
             {
                 perror("Error in send");
@@ -248,7 +248,17 @@ void Sch_algorithm(char sch_alg[],int* quantum){
     }
     if (!strcmp(sch_alg, "RR"))
     {
+        printf("Chosen Algorithm is  RR \n");
         printf("Enter Quantum for RR \n");
         scanf("%d", quantum);
     }
+    else if (!strcmp(sch_alg, "HPF"))
+    {
+        printf("Chosen Algorithm is  HPF \n");
+    }
+    else if (!strcmp(sch_alg, "SRTN"))
+    {
+        printf("Chosen Algorithm is  SRTN \n");
+    }
+
 }

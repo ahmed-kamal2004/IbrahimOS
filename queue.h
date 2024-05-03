@@ -24,6 +24,7 @@ struct Process {
 	int waitingTime;
 	int lastTimeRun;
 	int priority;
+	int temppriority;
     int finishTime;
     int state;
 };
@@ -36,12 +37,13 @@ Process * initProcess(int id,int arrivalTime,int priority,int runningTime){
 	Process * temp = (Process * ) malloc(sizeof(Process));
 	temp->id = id;
 	temp->pid = -1;
-	temp->lastTimeRun = -1;
-	temp->waitingTime = 0;
     temp ->arrivalTime = arrivalTime;
-	temp->priority = priority;
 	temp->runningTime = runningTime;
 	temp->remainingTime = runningTime;
+	temp->waitingTime = 0;
+	temp->lastTimeRun = -1;
+	temp->priority = priority;
+	temp->temppriority=priority;
 	temp ->state = READY;
 	temp->finishTime = -1;
 	return temp;
@@ -54,6 +56,7 @@ Process * copyProcess(Process * item){
 	temp->lastTimeRun = item->lastTimeRun;
 	temp->waitingTime = item->waitingTime;
 	temp->priority = item->priority;
+	temp->temppriority=item->temppriority;
 	temp->runningTime = item->runningTime;
 	temp->remainingTime = item->remainingTime;
 	temp ->state = item->state;
@@ -65,7 +68,7 @@ void printProcess(Process * item){
 }
 queueNode* setHead (Process *  item,queueNode * Next){
 	queueNode* temp = (queueNode *) malloc ( sizeof(queueNode)); 
-    temp -> head = copyProcess(item);
+    temp -> head = item;
     temp -> Next = Next;
 	return temp ;
 }
@@ -77,8 +80,7 @@ queueNode * enqueue(queueNode* queue,Process * item){
 		queueNode * temp = queue;
 		while (temp->Next)
 				temp = temp->Next;
-		queueNode * added = (queueNode*) malloc (sizeof(queueNode));
-		added = setHead(item,NULL); // set the next queue node
+		queueNode * added =setHead(item,NULL); // set the next queue node
         temp -> Next = added; 
 	}
     return queue;
@@ -100,4 +102,62 @@ void print(queueNode * queue){
         printProcess(temp->head);
 		temp = temp->Next;
     }
+}
+queueNode * enqueuePQSRTN(queueNode* queue,Process * item){
+	if (queue==NULL){
+		queue= setHead(item,NULL);
+	}
+	else{
+		queueNode * temp = queue;
+		queueNode * prev = queue;
+		while (temp&&temp->head->remainingTime<=item->remainingTime)
+		{
+			prev=temp;
+			temp = temp->Next;
+		}
+		queueNode * added =setHead(item,temp); // set the next queue node
+		if(prev!=temp)
+		{
+        	prev-> Next = added;
+		}
+		else{
+			queue=added;
+		}
+	}
+    return queue;
+}
+queueNode * enqueuePQHPF(queueNode* queue,Process * item){
+	if (queue==NULL){
+		queue= setHead(item,NULL);
+	}
+	else{
+		queueNode * temp = queue;
+		queueNode * prev = queue;
+		while (temp&&temp->head->temppriority<=item->temppriority)
+		{
+			prev=temp;
+			temp = temp->Next;
+		}
+		queueNode * added =setHead(item,temp); // set the next queue node
+		if(prev!=temp)
+		{
+        	prev-> Next = added;
+		}
+		else{
+			queue=added;
+		}
+	}
+    return queue;
+}
+
+
+Process *frontPQSRTN(queueNode* queue)
+{
+	if (queue==NULL){
+		return NULL;
+	}
+	else {
+		Process * temp= copyProcess(queue->head);
+		return temp;
+	}
 }
