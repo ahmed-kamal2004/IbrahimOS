@@ -4,6 +4,7 @@
 int remainingtime;
 void synchornize(){
     remainingtime--;
+    //printf("process remining time %d\n",remainingtime);
 }
 int main(int agrc, char * argv[])
 {

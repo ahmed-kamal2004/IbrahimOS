@@ -18,19 +18,21 @@ void printStatistics(int, int);
 void finishProcess(int);
 void clearResourcesScheduler(int);
 queueNode *readyProcesses = NULL;
+queueNode *readyProcessesSRTN = NULL;
+Process *currentProcess=NULL;
 queueNode *processDone = NULL;
 int process_quantum, processWorking, nProcesses, x, y, current_time, msgq_id, rec_val, shmid,quantum ;
 float CPU_Utilization = 0, avg_WA = 0, avg_WTA = 0, std_avg_WTA = 0, CPU_active_time = 0;
 FILE *logFile;
 key_t key_id, shd_key;
-
+char *sch_algo;
 int main(int argc, char **argv)
 {
     signal(SIGUSR1, finishProcess);
     signal(SIGINT,clearResourcesScheduler);
     // Parameters Initialization
     int num_of_process = atoi(argv[2]);
-    char *sch_algo = strdup(argv[1]); // 1 - Why ? not just = ?
+    sch_algo = strdup(argv[1]); // 1 - Why ? not just = ?
     processWorking = num_of_process;
     nProcesses = num_of_process;
     current_time = 0;
@@ -62,17 +64,7 @@ int main(int argc, char **argv)
     while (true)
     {
         // Arrived Process Using Message Queue IPC
-        msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
-        while (ctrl_status_ds.__msg_cbytes && num_of_process)
-        {
-            rec_val = msgrcv(msgq_id, &msg, sizeof(msg.msg), 7, !IPC_NOWAIT);
-            if (rec_val != -1)
-            {
-                num_of_process--;
-                readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
-            }
-            msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
-        }
+        
         // Getting Arrived processes is Finished
 
         // Lets start forking and scheduling
@@ -80,6 +72,29 @@ int main(int argc, char **argv)
         y = getClk();
         if (x != y)
         {
+            msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
+            while (ctrl_status_ds.__msg_cbytes && num_of_process)
+            {
+                rec_val = msgrcv(msgq_id, &msg, sizeof(msg.msg), 7, !IPC_NOWAIT);
+                if (rec_val != -1)
+                {
+                    num_of_process--;
+                    //printf("%d \n",msg.msg.id);
+                    if(!strcmp(sch_algo, "SRTN"))
+                    {
+                    readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                    }
+                    else if(!strcmp(sch_algo, "HPF"))
+                    {
+                        readyProcesses = enqueuePQHPF(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                    }
+                    else
+                    {
+                        readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                    }
+                }
+                msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
+            }
             if (!strcmp(sch_algo, "RR")) // Enters If Scheduling algorithm is RR
             {
                 if (readyProcesses && readyProcesses->head->state == READY) // Then It is in Ready State
@@ -150,11 +165,128 @@ int main(int argc, char **argv)
                     }
                 }
             }
-            else if (!strcmp(sch_algo, "HPF"))
-            {
-            }
             else if (!strcmp(sch_algo, "SRTN"))
             {
+                if(currentProcess==NULL)
+                {
+                    if (readyProcessesSRTN && readyProcessesSRTN->head->state == READY) // Then It is in Ready State
+                    {
+                        readyProcessesSRTN=dequeue(readyProcessesSRTN,&currentProcess);
+                        if (currentProcess->pid == -1) // First Time
+                        {
+                            int *child;
+                            int pid = fork();
+                            if (pid == -1)
+                            {
+                                perror("Error in Forking");
+                                exit(-1);
+                            }
+                            else if (pid == 0)
+                            {
+                                child = shmat(shmid, NULL, 0); // Attach to Shared Memory
+                                *child = getpid();
+                                shmdt(child); // DeAttach to shared Memery
+                                char remTime[32];
+                                sprintf(remTime, "%d", currentProcess->remainingTime);
+                                if (execl("process.out", "process.out", remTime, NULL) == -1)
+                                {
+                                    perror("Error in execution");
+                                    exit(-1);
+                                }
+                                // The Process went to execute on another Process in the OS
+                            }
+                            else // In the Kernel "Imagine"
+                            {
+                                raise(SIGSTOP); // Stops Waiting for Process Signal to wake up.
+                                child = shmat(shmid, NULL, 0);
+                                currentProcess->pid = *child;
+                                fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
+                                printf("At time %d process %d started arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
+                            }
+                        }
+                        else // If the Process is in Ready But is already created in the Kernel
+                        {
+                            kill(currentProcess->pid, SIGCONT); // Sends signal to the process to continue
+                            currentProcess->waitingTime += getClk() - currentProcess->lastTimeRun;
+                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
+                            printf("At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
+                        }
+                        currentProcess->state = RUNNING;
+                    }
+                }
+                else if(currentProcess&&currentProcess->state==RUNNING)
+                {
+                    CPU_active_time++;
+                    currentProcess->remainingTime--;
+                    /*if(currentProcess->id==3)
+                    {
+                        printf("remaingtime=%d\n",currentProcess->remainingTime);
+                    }*/
+                    currentProcess->lastTimeRun = getClk();
+                    kill(currentProcess->pid, SIGUSR1); // To make remaining time of the process decrease
+                    if(currentProcess&&readyProcessesSRTN &&readyProcessesSRTN->head->remainingTime<currentProcess->remainingTime)
+                    {
+                        kill(currentProcess->pid, SIGSTOP);
+                        currentProcess->state=READY;
+                        
+                        fprintf(logFile, "At time %d process %d stopped arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
+                        printf("At time %d process %d stopped arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);                            readyProcessesSRTN=enqueuePQSRTN(readyProcessesSRTN,currentProcess);
+                        //printProcess(currentProcess);
+                        //readyProcessesSRTN=enqueuePQSRTN(readyProcessesSRTN,currentProcess);
+                        currentProcess=NULL;
+                        //readyProcessesSRTN=dequeue(readyProcessesSRTN,&currentProcess);
+
+        
+                        //Process * tempp;
+                        //readyProcessesSRTN=dequeue(readyProcessesSRTN,&tempp);
+                    }
+                }
+                
+            }
+            else if (!strcmp(sch_algo, "HPF"))
+            {
+                if (readyProcesses && readyProcesses->head->state == READY) // Then It is in Ready State
+                {
+                    int *child;
+                    int pid = fork();
+                    if (pid == -1)
+                    {
+                        perror("Error in Forking");
+                        exit(-1);
+                    }
+                    else if (pid == 0)
+                    {
+                        child = shmat(shmid, NULL, 0); // Attach to Shared Memory
+                        *child = getpid();
+                        shmdt(child); // DeAttach to shared Memery
+                        char remTime[32];
+                        sprintf(remTime, "%d", readyProcesses->head->remainingTime);
+                        if (execl("process.out", "process.out", remTime, NULL) == -1)
+                        {
+                            perror("Error in execution");
+                            exit(-1);
+                        }
+                            // The Process went to execute on another Process in the OS
+                    }
+                    else // In the Kernel "Imagine"
+                    {
+                    raise(SIGSTOP); // Stops Waiting for Process Signal to wake up.
+                    child = shmat(shmid, NULL, 0);
+                    readyProcesses->head->pid = *child;
+                    readyProcesses->head->waitingTime += getClk() - readyProcesses->head->arrivalTime;
+                    fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
+                    printf("At time %d process %d started arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
+                    }
+                    readyProcesses->head->state = RUNNING;
+                    readyProcesses->head->temppriority=0;
+                }
+                else if (readyProcesses && readyProcesses->head->state == RUNNING)
+                {
+                    kill(readyProcesses->head->pid, SIGUSR1); // To make remaining time of the process decrease
+                    CPU_active_time++;
+                    readyProcesses->head->remainingTime--;
+                    readyProcesses->head->lastTimeRun=y;
+                }
             }
 
             // For ending Processes
@@ -199,8 +331,29 @@ void printStatistics(int nProcesses, int current_time)
     printf("Standard deviation for average weighted turnaround time: %.3f\n", std_avg_WTA);
     fclose(file);
 }
+void finishProcessSRTN()
+{
+    currentProcess->state = TERMINATED;
+    processWorking--;
+    currentProcess->finishTime = getClk();
+    float TA = currentProcess->finishTime - currentProcess->arrivalTime;
+    
+    fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %0.2f WTA %0.2f\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime, TA, TA / currentProcess->runningTime);
+    if(currentProcess->id==3)
+    {
+        printf("process done id=%d\n",currentProcess->id);
+    }
+    processDone = enqueue(processDone, currentProcess);
+    currentProcess=NULL;
+
+}
 void finishProcess(int signum)
 {
+    if(!strcmp(sch_algo, "SRTN"))
+    {
+        finishProcessSRTN();
+        return;
+    }
     readyProcesses->head->state = TERMINATED;
     processWorking--;
     readyProcesses->head->finishTime = getClk();
