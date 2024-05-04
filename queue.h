@@ -27,13 +27,14 @@ struct Process {
 	int temppriority;
     int finishTime;
     int state;
+	int memsize; // Ahmed Kamal
 };
 
 struct queueNode {
     Process * head;
     queueNode * Next;
 };
-Process * initProcess(int id,int arrivalTime,int priority,int runningTime){
+Process * initProcess(int id,int arrivalTime,int priority,int runningTime,int memsize){ // Ahmed Kamal
 	Process * temp = (Process * ) malloc(sizeof(Process));
 	temp->id = id;
 	temp->pid = -1;
@@ -46,6 +47,7 @@ Process * initProcess(int id,int arrivalTime,int priority,int runningTime){
 	temp->temppriority=priority;
 	temp ->state = READY;
 	temp->finishTime = -1;
+	temp->memsize = memsize; // Ahmed Kamal
 	return temp;
 }
 Process * copyProcess(Process * item){
@@ -61,6 +63,7 @@ Process * copyProcess(Process * item){
 	temp->remainingTime = item->remainingTime;
 	temp ->state = item->state;
 	temp->finishTime = item->finishTime;
+	temp->memsize = item->memsize; // Ahmed Kamal
 	return temp;
 }
 void printProcess(Process * item){

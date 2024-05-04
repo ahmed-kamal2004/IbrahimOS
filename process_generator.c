@@ -19,6 +19,7 @@ struct PCB
     int arrTime;
     int priority;
     int runtime;
+    int memsize;
     struct PCB *next;
 };
 
@@ -27,6 +28,7 @@ struct message{
     int arrTime;
     int RunTime;
     int Priority;
+    int memsize;
 };
 struct msgbuff
 {
@@ -37,7 +39,7 @@ struct msgbuff
 
 
 void clearResources(int);
-struct PCB *PCB_init(int, int, int, int);
+struct PCB *PCB_init(int, int, int, int,int);
 struct PCB *PCB_add(struct PCB *, struct PCB *);
 struct PCB *PCB_remove(struct PCB *);
 int PCB_length(struct PCB *);
@@ -137,6 +139,7 @@ int main(int argc, char *argv[])
             msg.msg.arrTime = head->arrTime;
             msg.msg.Priority = head->priority;
             msg.msg.RunTime = head->runtime;
+            msg.msg.memsize = head->memsize;
             send_val= msgsnd(msgq_id, &msg, sizeof(msg.msg), !IPC_NOWAIT);
             if (send_val == -1 )
             {
@@ -161,13 +164,14 @@ void clearResources(int signum)
     raise(SIGKILL);
     exit(-1);
 }
-struct PCB *PCB_init(int id, int arrivalTime, int Runtime, int Prority)
+struct PCB *PCB_init(int id, int arrivalTime, int Runtime, int Prority,int memsize)
 {
     struct PCB *new_pcb = malloc(sizeof(struct PCB) * 2);
     new_pcb->arrTime = arrivalTime;
     new_pcb->id = id;
     new_pcb->priority = Prority;
     new_pcb->runtime = Runtime;
+    new_pcb->memsize = memsize;
     new_pcb->next = NULL;
 
     return new_pcb;
@@ -207,7 +211,7 @@ void PCB_printer(struct PCB *head)
     struct PCB *looper = head;
     while (looper != NULL)
     {
-        printf("%d %d %d %d \n", looper->id, looper->arrTime, looper->runtime, looper->priority);
+        printf("%d %d %d %d %d\n", looper->id, looper->arrTime, looper->runtime, looper->priority, looper->memsize);
         looper = looper->next;
     }
     printf("NULL\n");
@@ -217,7 +221,7 @@ struct PCB* File_Reader(){
 
     struct PCB *head = NULL;
     FILE *fptr;
-    int arrvial_time, id, runtime, priority;
+    int arrvial_time, id, runtime, priority,memsize;
     char file_buffer[512];
     fptr = fopen(PROCESS_FILE, "r");
     if (fptr == NULL)
@@ -229,12 +233,12 @@ struct PCB* File_Reader(){
     char line[512];
     while (fgets(line, 512, fptr) != NULL)
     {
-        char output = sscanf(line, "%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority);
+        char output = sscanf(line, "%d\t%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority,&memsize);
         if (output == 0)
         {
             continue;
         }
-        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority);
+        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority,memsize);
         head = PCB_add(head, new_struct);
     }
     fclose(fptr);

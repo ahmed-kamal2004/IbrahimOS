@@ -7,6 +7,7 @@ struct message
     int arrTime;
     int RunTime;
     int Priority;
+    int memsize;
 };
 struct msgbuff
 {
@@ -82,15 +83,15 @@ int main(int argc, char **argv)
                     //printf("%d \n",msg.msg.id);
                     if(!strcmp(sch_algo, "SRTN"))
                     {
-                    readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                    readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime,msg.msg.memsize)); // Ahmed Kamal
                     }
                     else if(!strcmp(sch_algo, "HPF"))
                     {
-                        readyProcesses = enqueuePQHPF(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                        readyProcesses = enqueuePQHPF(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime,msg.msg.memsize)); // Abo kamal
                     }
                     else
                     {
-                        readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime));
+                        readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime,msg.msg.memsize)); // edition of memsize 3obal el memes
                     }
                 }
                 msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
