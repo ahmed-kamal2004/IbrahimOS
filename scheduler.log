@@ -1,25 +1,7 @@
 #At time x process y state arr w total z remain y wait k
-At time 3 process 1 started arr 3 total 7 remain 7 wait 0
-At time 10 process 1 finished arr 3 total 7 remain 0 wait 0 TA 7.00 WTA 1.00
-At time 11 process 2 started arr 8 total 2 remain 2 wait 0
-At time 13 process 2 finished arr 8 total 2 remain 0 wait 0 TA 5.00 WTA 2.50
-At time 14 process 4 started arr 13 total 1 remain 1 wait 0
-At time 15 process 4 finished arr 13 total 1 remain 0 wait 0 TA 2.00 WTA 2.00
-At time 16 process 3 started arr 12 total 5 remain 5 wait 0
-At time 21 process 3 finished arr 12 total 5 remain 0 wait 0 TA 9.00 WTA 1.80
-At time 22 process 6 started arr 20 total 3 remain 3 wait 0
-At time 25 process 6 finished arr 20 total 3 remain 0 wait 0 TA 5.00 WTA 1.67
-At time 26 process 7 started arr 21 total 7 remain 7 wait 0
-At time 28 process 7 stopped arr 21 total 7 remain 5 wait 0
-At time 29 process 8 started arr 28 total 3 remain 3 wait 0
-At time 32 process 8 finished arr 28 total 3 remain 0 wait 0 TA 4.00 WTA 1.33
-At time 33 process 7 resumed arr 21 total 7 remain 5 wait 5
-At time 36 process 7 stopped arr 21 total 7 remain 2 wait 5
-At time 37 process 10 started arr 35 total 1 remain 1 wait 0
-At time 38 process 10 finished arr 35 total 1 remain 0 wait 0 TA 3.00 WTA 3.00
-At time 39 process 7 resumed arr 21 total 7 remain 2 wait 8
-At time 41 process 7 finished arr 21 total 7 remain 0 wait 8 TA 20.00 WTA 2.86
-At time 42 process 9 started arr 32 total 5 remain 5 wait 0
-At time 47 process 9 finished arr 32 total 5 remain 0 wait 0 TA 15.00 WTA 3.00
-At time 48 process 5 started arr 18 total 10 remain 10 wait 0
-At time 58 process 5 finished arr 18 total 10 remain 0 wait 0 TA 40.00 WTA 4.00
+At time 9 process 1 started arr 9 total 9 remain 9 wait 0
+At time 14 process 1 stopped arr 9 total 9 remain 3 wait 0
+At time 15 process 2 started arr 12 total 4 remain 4 wait 0
+At time 18 process 2 finished arr 12 total 4 remain 0 wait 0 TA 6.00 WTA 1.50
+At time 19 process 1 resumed arr 9 total 9 remain 3 wait 5
+At time 21 process 1 finished arr 9 total 9 remain 0 wait 5 TA 12.00 WTA 1.33

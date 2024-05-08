@@ -23,7 +23,8 @@ struct PCB
     struct PCB *next;
 };
 
-struct message{
+struct message
+{
     int id;
     int arrTime;
     int RunTime;
@@ -36,18 +37,14 @@ struct msgbuff
     struct message msg;
 };
 
-
-
 void clearResources(int);
-struct PCB *PCB_init(int, int, int, int,int);
+struct PCB *PCB_init(int, int, int, int, int);
 struct PCB *PCB_add(struct PCB *, struct PCB *);
 struct PCB *PCB_remove(struct PCB *);
 int PCB_length(struct PCB *);
 void PCB_printer(struct PCB *);
-struct PCB*File_Reader();
-void Sch_algorithm(char [],int*);
-
-
+struct PCB *File_Reader();
+void Sch_algorithm(char[], int *);
 
 int main(int argc, char *argv[])
 {
@@ -61,14 +58,10 @@ int main(int argc, char *argv[])
 
     head = File_Reader();
 
-
     // 2. Ask the user for the chosen scheduling algorithm and its parameters, if there are any.   DONE
     char sch_alg[10];
     int quantum = 0;
-    Sch_algorithm(sch_alg,&quantum);
-
-
-
+    Sch_algorithm(sch_alg, &quantum);
 
     // 3. Initiate and create the scheduler and clock processes.  DONE
     int clk_pid, sch_pid;
@@ -85,23 +78,24 @@ int main(int argc, char *argv[])
     sch_pid = fork();
     if (sch_pid == -1)
     {
-            perror("error in schedular fork");
-            exit(-1);
+        perror("error in schedular fork");
+        exit(-1);
     }
     if (sch_pid == 0)
-    {   
-        char qunat [32];
-        char num_of_process[32];     
-        sprintf(num_of_process,"%d",PCB_length(head));
-        if(strcmp(sch_alg,"RR")==0){
-            sprintf(qunat,"%d",quantum);
-            execl("scheduler.out", "scheduler.out", sch_alg,num_of_process,qunat, NULL);
+    {
+        char qunat[32];
+        char num_of_process[32];
+        sprintf(num_of_process, "%d", PCB_length(head));
+        if (strcmp(sch_alg, "RR") == 0)
+        {
+            sprintf(qunat, "%d", quantum);
+            execl("scheduler.out", "scheduler.out", sch_alg, num_of_process, qunat, NULL);
         }
-      else
-        {  
-            execl("scheduler.out", "scheduler.out", sch_alg, num_of_process,NULL);
+        else
+        {
+            execl("scheduler.out", "scheduler.out", sch_alg, num_of_process, NULL);
         } // sch_alg as argument to the code // 0 as a quantum for rr , 0 else
-        }
+    }
 
     // 4 - sending the number of processes
     key_t key_id;
@@ -110,14 +104,12 @@ int main(int argc, char *argv[])
 
     key_id = ftok("keyFile", 65);
 
-
-    msgq_id= msgget(key_id, 0666 | IPC_CREAT);
+    msgq_id = msgget(key_id, 0666 | IPC_CREAT);
 
     struct msqid_ds ctrl_status_ds;
     msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
     ctrl_status_ds.msg_qbytes *= 4;
-    msgctl(msgq_id,IPC_SET,&ctrl_status_ds);
-
+    msgctl(msgq_id, IPC_SET, &ctrl_status_ds);
 
     if (msgq_id == -1)
     {
@@ -130,18 +122,17 @@ int main(int argc, char *argv[])
 
     initClk();
 
-
     while (PCB_length(head))
     {
-        while (head  != NULL && getClk() == head->arrTime)
+        while (head != NULL && getClk() == head->arrTime)
         {
             msg.msg.id = head->id;
             msg.msg.arrTime = head->arrTime;
             msg.msg.Priority = head->priority;
             msg.msg.RunTime = head->runtime;
             msg.msg.memsize = head->memsize;
-            send_val= msgsnd(msgq_id, &msg, sizeof(msg.msg), !IPC_NOWAIT);
-            if (send_val == -1 )
+            send_val = msgsnd(msgq_id, &msg, sizeof(msg.msg), IPC_NOWAIT);
+            if (send_val == -1)
             {
                 perror("Error in send");
             }
@@ -159,12 +150,12 @@ void clearResources(int signum)
 {
     // TODO Clears all resources in case of interruption
     msgctl(msgq_id, IPC_RMID, (struct msqid_ds *)0);
-    //while(PCB_remove(head));
+    // while(PCB_remove(head));
     destroyClk(true);
     raise(SIGKILL);
     exit(-1);
 }
-struct PCB *PCB_init(int id, int arrivalTime, int Runtime, int Prority,int memsize)
+struct PCB *PCB_init(int id, int arrivalTime, int Runtime, int Prority, int memsize)
 {
     struct PCB *new_pcb = malloc(sizeof(struct PCB) * 2);
     new_pcb->arrTime = arrivalTime;
@@ -217,11 +208,12 @@ void PCB_printer(struct PCB *head)
     printf("NULL\n");
     return;
 }
-struct PCB* File_Reader(){
+struct PCB *File_Reader()
+{
 
     struct PCB *head = NULL;
     FILE *fptr;
-    int arrvial_time, id, runtime, priority,memsize;
+    int arrvial_time, id, runtime, priority, memsize;
     char file_buffer[512];
     fptr = fopen(PROCESS_FILE, "r");
     if (fptr == NULL)
@@ -233,18 +225,19 @@ struct PCB* File_Reader(){
     char line[512];
     while (fgets(line, 512, fptr) != NULL)
     {
-        char output = sscanf(line, "%d\t%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority,&memsize);
+        char output = sscanf(line, "%d\t%d\t%d\t%d\t%d\n", &id, &arrvial_time, &runtime, &priority, &memsize);
         if (output == 0)
         {
             continue;
         }
-        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority,memsize);
+        struct PCB *new_struct = PCB_init(id, arrvial_time, runtime, priority, memsize);
         head = PCB_add(head, new_struct);
     }
     fclose(fptr);
     return head;
 }
-void Sch_algorithm(char sch_alg[],int* quantum){
+void Sch_algorithm(char sch_alg[], int *quantum)
+{
     while (strcmp(sch_alg, "RR") && strcmp(sch_alg, "SRTN") && strcmp(sch_alg, "HPF"))
     {
         printf("Choose Scheduling algorithm  RR | SRTN | HPF\n");
@@ -264,5 +257,4 @@ void Sch_algorithm(char sch_alg[],int* quantum){
     {
         printf("Chosen Algorithm is  SRTN \n");
     }
-
 }
