@@ -326,7 +326,7 @@ void printStatistics(int nProcesses, int current_time)
         std_avg_WTA += (WTA[i] - avg_WTA) * (WTA[i] - avg_WTA);
     }
     std_avg_WTA = sqrt(std_avg_WTA);
-    printf("CPU Utiltization : %0.3f %%\n", (CPU_active_time) * 100 / (float)current_time);
+    printf("CPU Utiltization : %0.3f %%\n", (CPU_active_time) * 100 / (float)(current_time - 1));
     printf("Average Weighted Turnaround Time : %0.3f \n", avg_WTA);
     printf("Average Waiting Time : %0.3f\n", avg_WA);
     printf("Standard deviation for average weighted turnaround time: %.3f\n", std_avg_WTA);
