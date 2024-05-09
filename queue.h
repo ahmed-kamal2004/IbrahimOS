@@ -15,6 +15,7 @@
 #define TERMINATED 2
 typedef struct queueNode queueNode;
 typedef struct Process Process;
+typedef struct memorySegment memorySegment;
 struct Process
 {
 	int id;
@@ -185,4 +186,102 @@ Process *frontPQSRTN(queueNode *queue)
 		Process *temp = copyProcess(queue->head);
 		return temp;
 	}
+}
+struct memorySegment
+{
+	int free_size;
+	int size;
+	struct memorySegment *left;
+	struct memorySegment *right;
+	int containing_pid;
+	int start;
+	int end;
+};
+memorySegment *createSegment(int size, int start, int end)
+{
+	memorySegment *temp = (memorySegment *)malloc(sizeof(memorySegment));
+	temp->containing_pid = -1;
+	temp->free_size = size;
+	temp->size = size;
+	temp->left = NULL;
+	temp->right = NULL;
+	temp->start = start;
+	temp->end = end;
+	return temp;
+}
+memorySegment *allocateMemory(memorySegment *temp, int pid, int size, bool *done)
+{
+	size = pow(2, ceil(log(size) / log(2)));
+	if (temp->free_size < size)
+	{
+		*done = false;
+		return temp;
+	}
+	if (temp->size / 2 < size)
+	{
+		*done = true;
+		temp->containing_pid = pid;
+		temp->free_size -= size;
+		printf("id %d is allocated from %d to %d \n", pid, temp->start, temp->end);
+		return temp;
+	}
+	if (temp->left && temp->left->free_size >= size)
+	{
+		temp->free_size -= size;
+		memorySegment *res = allocateMemory(temp->left, pid, size, done);
+	}
+	else if (temp->left == NULL)
+	{
+		// create a one :)  ;
+		memorySegment *l = createSegment(temp->size / 2, 0, temp->size / 2 - 1);
+		temp->left = l;
+		temp->free_size -= size;
+		memorySegment *res = allocateMemory(temp->left, pid, size, done);
+	}
+	else if (temp->right && temp->right->free_size >= size)
+	{
+
+		temp->free_size -= size;
+		memorySegment *res = allocateMemory(temp->right, pid, size, done);
+	}
+	else if (temp->right == NULL)
+	{
+		memorySegment *r = createSegment(temp->size / 2, temp->size / 2, temp->size - 1);
+		temp->right = r;
+		temp->free_size -= size;
+		memorySegment *res = allocateMemory(temp->right, pid, size, done);
+	}
+	return temp;
+}
+memorySegment *deleteMemory(memorySegment *temp, int pid, bool *done)
+{
+	if (temp && temp->containing_pid == pid)
+	{
+		printf("id %d deallocated from %d to %d \n", pid, temp->start, temp->end);
+		*done = true;
+		free(temp);
+		return NULL;
+	}
+	else if (!temp->left && !temp->right)
+		return temp;
+	else
+	{
+		if (temp->left)
+		{
+			temp->left = deleteMemory(temp->left, pid, done);
+			if (temp->left == NULL)
+			{
+				temp->free_size += temp->size / 2;
+			}
+		}
+		if (temp->right)
+		{
+			temp->right = deleteMemory(temp->right, pid, done);
+			if (temp->right == NULL)
+			{
+				temp->free_size += temp->size / 2;
+			}
+		}
+	}
+	return temp;
 }

@@ -25,8 +25,10 @@ queueNode *processDone = NULL;
 int process_quantum, processWorking, nProcesses, x, y, current_time, msgq_id, rec_val, shmid, quantum;
 float CPU_Utilization = 0, avg_WA = 0, avg_WTA = 0, std_avg_WTA = 0, CPU_active_time = 0;
 FILE *logFile;
+FILE *MemoryFile;
 key_t key_id, shd_key;
 char *sch_algo;
+bool isempty = false;
 int main(int argc, char **argv)
 {
     signal(SIGUSR1, finishProcess);
@@ -54,6 +56,7 @@ int main(int argc, char **argv)
     }
     // Opening File with "WRITE" mode
     logFile = fopen("scheduler.log", "w");
+    MemoryFile = fopen("memory.log", "w");
     // Init file
     fprintf(logFile, "%s", "#At time x process y state arr w total z remain y wait k\n");
 
