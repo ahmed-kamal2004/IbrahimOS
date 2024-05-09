@@ -187,6 +187,7 @@ Process *frontPQSRTN(queueNode *queue)
 		return temp;
 	}
 }
+// New Extension to Memory Allocation
 struct memorySegment
 {
 	int free_size;
