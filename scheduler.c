@@ -22,13 +22,17 @@ queueNode *readyProcesses = NULL;
 queueNode *readyProcessesSRTN = NULL;
 Process *currentProcess = NULL;
 queueNode *processDone = NULL;
+queueNode *WaitingProcesses = NULL;
+memorySegment *memory = NULL;
 int process_quantum, processWorking, nProcesses, x, y, current_time, msgq_id, rec_val, shmid, quantum;
 float CPU_Utilization = 0, avg_WA = 0, avg_WTA = 0, std_avg_WTA = 0, CPU_active_time = 0;
 FILE *logFile;
 FILE *MemoryFile;
 key_t key_id, shd_key;
 char *sch_algo;
-bool isempty = false;
+bool is_allocated = false;
+char *start_end = NULL;
+
 int main(int argc, char **argv)
 {
     signal(SIGUSR1, finishProcess);
@@ -36,9 +40,11 @@ int main(int argc, char **argv)
     // Parameters Initialization
     int num_of_process = atoi(argv[2]);
     sch_algo = strdup(argv[1]); // 1 - Why ? not just = ?
+    memory = createSegment(1024, 0, 1023);
     processWorking = num_of_process;
     nProcesses = num_of_process;
     current_time = 0;
+    start_end = (char *)malloc(50 * sizeof(char));
     if (strcmp(sch_algo, "RR") == 0)
     {
         quantum = atoi(argv[3]);
@@ -59,7 +65,7 @@ int main(int argc, char **argv)
     MemoryFile = fopen("memory.log", "w");
     // Init file
     fprintf(logFile, "%s", "#At time x process y state arr w total z remain y wait k\n");
-
+    fprintf(MemoryFile, "%s", "#At time x allocated y bytes for process z from i to j\n");
     struct msgbuff msg;
     msg.mtype = 7;
     struct msqid_ds ctrl_status_ds;
@@ -86,17 +92,27 @@ int main(int argc, char **argv)
                 {
                     num_of_process--;
                     printf("I received the process %d we now at time step %d \n", msg.msg.id, getClk());
-                    if (!strcmp(sch_algo, "SRTN"))
+                    is_allocated = false;
+                    memory = allocateMemory(memory, msg.msg.id, msg.msg.memsize, &is_allocated, &start_end);
+                    if (is_allocated)
                     {
-                        readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // Ahmed Kamal
-                    }
-                    else if (!strcmp(sch_algo, "HPF"))
-                    {
-                        readyProcesses = enqueuePQHPF(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // Abo kamal
+                        fprintf(MemoryFile, "at time %d allocated %d bytes for process %d %s\n", y, msg.msg.memsize, msg.msg.id, start_end);
+                        if (!strcmp(sch_algo, "SRTN"))
+                        {
+                            readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // Ahmed Kamal
+                        }
+                        else if (!strcmp(sch_algo, "HPF"))
+                        {
+                            readyProcesses = enqueuePQHPF(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // Abo kamal
+                        }
+                        else
+                        {
+                            readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // edition of memsize 3obal el memes
+                        }
                     }
                     else
                     {
-                        readyProcesses = enqueue(readyProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize)); // edition of memsize 3obal el memes
+                        WaitingProcesses = enqueuePQMemory(WaitingProcesses, initProcess(msg.msg.id, msg.msg.arrTime, msg.msg.Priority, msg.msg.RunTime, msg.msg.memsize));
                     }
                 }
                 msgctl(msgq_id, IPC_STAT, &ctrl_status_ds);
@@ -134,21 +150,28 @@ int main(int argc, char **argv)
                             raise(SIGSTOP); // Stops Waiting for Process Signal to wake up.
                             child = shmat(shmid, NULL, 0);
                             readyProcesses->head->pid = *child;
+                            readyProcesses->head->waitingTime = getClk() - readyProcesses->head->arrivalTime;
                             fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
                             printf("At time %d process %d started arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
                         }
                     }
                     else // If the Process is in Ready But is already created in the Kernel
                     {
-                        kill(readyProcesses->head->pid, SIGCONT); // Sends signal to the process to continue
-                        readyProcesses->head->waitingTime += getClk() - readyProcesses->head->lastTimeRun;
-                        fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
-                        printf("At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
+                        if (readyProcesses->head->remainingTime > 0)
+                        {
+                            kill(readyProcesses->head->pid, SIGCONT); // Sends signal to the process to continue
+                            readyProcesses->head->waitingTime += getClk() - readyProcesses->head->lastTimeRun;
+                            fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
+                            printf("At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime);
+                        }
                     }
-                    readyProcesses->head->state = RUNNING;
-                    process_quantum = quantum;
+                    if (readyProcesses->head->remainingTime > 0)
+                    {
+                        readyProcesses->head->state = RUNNING;
+                        process_quantum = quantum;
+                    }
                 }
-                if (readyProcesses && readyProcesses->head->state == RUNNING)
+                if (readyProcesses && readyProcesses->head->state == RUNNING && readyProcesses->head->remainingTime > 0)
                 {
 
                     if (process_quantum)
@@ -206,6 +229,7 @@ int main(int argc, char **argv)
                                 raise(SIGSTOP); // Stops Waiting for Process Signal to wake up.
                                 child = shmat(shmid, NULL, 0);
                                 currentProcess->pid = *child;
+                                currentProcess->waitingTime += y - currentProcess->arrivalTime;
                                 fprintf(logFile, "At time %d process %d started arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
                                 printf("At time %d process %d started arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
                             }
@@ -213,7 +237,7 @@ int main(int argc, char **argv)
                         else // If the Process is in Ready But is already created in the Kernel
                         {
                             kill(currentProcess->pid, SIGCONT); // Sends signal to the process to continue
-                            currentProcess->waitingTime += getClk() - currentProcess->lastTimeRun;
+                            currentProcess->waitingTime += y - currentProcess->lastTimeRun;
                             fprintf(logFile, "At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
                             printf("At time %d process %d resumed arr %d total %d remain %d wait %d\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime);
                         }
@@ -341,12 +365,28 @@ void finishProcessSRTN()
     currentProcess->state = TERMINATED;
     processWorking--;
     currentProcess->finishTime = getClk();
+    Process *toDelete;
     float TA = currentProcess->finishTime - currentProcess->arrivalTime;
-
     fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %0.2f WTA %0.2f\n", y, currentProcess->id, currentProcess->arrivalTime, currentProcess->runningTime, currentProcess->remainingTime, currentProcess->waitingTime, TA, TA / currentProcess->runningTime);
-    if (currentProcess->id == 3)
+    is_allocated = false;
+    memory = deleteMemory(memory, currentProcess->id, &is_allocated, &start_end);
+    if (is_allocated)
     {
-        printf("process done id=%d\n", currentProcess->id);
+        fprintf(MemoryFile, "at time %d freed %d bytes for process %d %s\n", y, currentProcess->memsize, currentProcess->id, start_end);
+        if (WaitingProcesses)
+        {
+            memory = allocateMemory(memory, WaitingProcesses->head->id, WaitingProcesses->head->memsize, &is_allocated, &start_end);
+            if (is_allocated)
+            {
+                WaitingProcesses = dequeue(WaitingProcesses, &toDelete);
+                fprintf(MemoryFile, "at time %d allocated %d bytes for process %d %s\n", getClk(), toDelete->memsize, toDelete->id, start_end);
+                readyProcessesSRTN = enqueuePQSRTN(readyProcessesSRTN, toDelete);
+            }
+        }
+    }
+    else
+    {
+        printf("HI from the other world!\n");
     }
     processDone = enqueue(processDone, currentProcess);
     currentProcess = NULL;
@@ -365,6 +405,30 @@ void finishProcess(int signum)
     float TA = readyProcesses->head->finishTime - readyProcesses->head->arrivalTime;
     fprintf(logFile, "At time %d process %d finished arr %d total %d remain %d wait %d TA %0.2f WTA %0.2f\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime, TA, TA / readyProcesses->head->runningTime);
     printf("At time %d process %d finished arr %d total %d remain %d wait %d TA %0.2f WTA %0.2f\n", y, readyProcesses->head->id, readyProcesses->head->arrivalTime, readyProcesses->head->runningTime, readyProcesses->head->remainingTime, readyProcesses->head->waitingTime, TA, TA / readyProcesses->head->runningTime);
+    is_allocated = false;
+    memory = deleteMemory(memory, readyProcesses->head->id, &is_allocated, &start_end);
+    if (is_allocated)
+    {
+        fprintf(MemoryFile, "at time %d freed %d bytes for process %d %s\n", y, readyProcesses->head->memsize, readyProcesses->head->id, start_end);
+        is_allocated = false;
+        if (WaitingProcesses)
+        {
+            memory = allocateMemory(memory, WaitingProcesses->head->id, WaitingProcesses->head->memsize, &is_allocated, &start_end);
+            if (is_allocated)
+            {
+                WaitingProcesses = dequeue(WaitingProcesses, &toDelete);
+                fprintf(MemoryFile, "at time %d allocated %d bytes for process %d %s\n", y, toDelete->memsize, toDelete->id, start_end);
+                if (!strcmp(sch_algo, "HPF"))
+                {
+                    readyProcesses = enqueuePQHPF(readyProcesses, toDelete);
+                }
+                else
+                {
+                    readyProcesses = enqueue(readyProcesses, toDelete);
+                }
+            }
+        }
+    }
     readyProcesses = dequeue(readyProcesses, &toDelete);
     processDone = enqueue(processDone, toDelete);
 }

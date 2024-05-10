@@ -16,6 +16,10 @@
 typedef struct queueNode queueNode;
 typedef struct Process Process;
 typedef struct memorySegment memorySegment;
+int max(int a, int b)
+{
+	return a > b ? a : b;
+}
 struct Process
 {
 	int id;
@@ -147,6 +151,33 @@ queueNode *enqueuePQSRTN(queueNode *queue, Process *item)
 	}
 	return queue;
 }
+queueNode *enqueuePQMemory(queueNode *queue, Process *item)
+{
+	if (queue == NULL)
+	{
+		queue = setHead(item, NULL);
+	}
+	else
+	{
+		queueNode *temp = queue;
+		queueNode *prev = queue;
+		while (temp && temp->head->memsize <= item->memsize)
+		{
+			prev = temp;
+			temp = temp->Next;
+		}
+		queueNode *added = setHead(item, temp); // set the next queue node
+		if (prev != temp)
+		{
+			prev->Next = added;
+		}
+		else
+		{
+			queue = added;
+		}
+	}
+	return queue;
+}
 queueNode *enqueuePQHPF(queueNode *queue, Process *item)
 {
 	if (queue == NULL)
@@ -210,7 +241,7 @@ memorySegment *createSegment(int size, int start, int end)
 	temp->end = end;
 	return temp;
 }
-memorySegment *allocateMemory(memorySegment *temp, int pid, int size, bool *done)
+memorySegment *allocateMemory(memorySegment *temp, int pid, int size, bool *done, char **msg)
 {
 	size = pow(2, ceil(log(size) / log(2)));
 	if (temp->free_size < size)
@@ -221,6 +252,7 @@ memorySegment *allocateMemory(memorySegment *temp, int pid, int size, bool *done
 	if (temp->size / 2 < size)
 	{
 		*done = true;
+		sprintf(*msg, "from %d to %d ", temp->start, temp->end);
 		temp->containing_pid = pid;
 		temp->free_size -= size;
 		printf("id %d is allocated from %d to %d \n", pid, temp->start, temp->end);
@@ -229,36 +261,37 @@ memorySegment *allocateMemory(memorySegment *temp, int pid, int size, bool *done
 	if (temp->left && temp->left->free_size >= size)
 	{
 		temp->free_size -= size;
-		memorySegment *res = allocateMemory(temp->left, pid, size, done);
+		memorySegment *res = allocateMemory(temp->left, pid, size, done, msg);
 	}
 	else if (temp->left == NULL)
 	{
-		// create a one :)  ;
-		memorySegment *l = createSegment(temp->size / 2, 0, temp->size / 2 - 1);
+		// create a one :  ;
+		memorySegment *l = createSegment(temp->size / 2, temp->start, temp->start + temp->size / 2 - 1);
 		temp->left = l;
 		temp->free_size -= size;
-		memorySegment *res = allocateMemory(temp->left, pid, size, done);
+		memorySegment *res = allocateMemory(temp->left, pid, size, done, msg);
 	}
 	else if (temp->right && temp->right->free_size >= size)
 	{
 
 		temp->free_size -= size;
-		memorySegment *res = allocateMemory(temp->right, pid, size, done);
+		memorySegment *res = allocateMemory(temp->right, pid, size, done, msg);
 	}
 	else if (temp->right == NULL)
 	{
-		memorySegment *r = createSegment(temp->size / 2, temp->size / 2, temp->size - 1);
+		memorySegment *r = createSegment(temp->size / 2, temp->start + temp->size / 2, temp->start + temp->size - 1);
 		temp->right = r;
 		temp->free_size -= size;
-		memorySegment *res = allocateMemory(temp->right, pid, size, done);
+		memorySegment *res = allocateMemory(temp->right, pid, size, done, msg);
 	}
 	return temp;
 }
-memorySegment *deleteMemory(memorySegment *temp, int pid, bool *done)
+memorySegment *deleteMemory(memorySegment *temp, int pid, bool *done, char **msg)
 {
 	if (temp && temp->containing_pid == pid)
 	{
 		printf("id %d deallocated from %d to %d \n", pid, temp->start, temp->end);
+		sprintf(*msg, "from %d to %d ", temp->start, temp->end);
 		*done = true;
 		free(temp);
 		return NULL;
@@ -269,18 +302,26 @@ memorySegment *deleteMemory(memorySegment *temp, int pid, bool *done)
 	{
 		if (temp->left)
 		{
-			temp->left = deleteMemory(temp->left, pid, done);
+			temp->left = deleteMemory(temp->left, pid, done, msg);
 			if (temp->left == NULL)
 			{
 				temp->free_size += temp->size / 2;
 			}
+			else
+			{
+				temp->free_size = max(temp->free_size, temp->left->free_size + (temp->right ? temp->right->free_size : 0));
+			}
 		}
-		if (temp->right)
+		if (!*done && temp->right)
 		{
-			temp->right = deleteMemory(temp->right, pid, done);
+			temp->right = deleteMemory(temp->right, pid, done, msg);
 			if (temp->right == NULL)
 			{
 				temp->free_size += temp->size / 2;
+			}
+			else
+			{
+				temp->free_size = max(temp->free_size, temp->right->free_size + (temp->left ? temp->left->free_size : 0));
 			}
 		}
 	}

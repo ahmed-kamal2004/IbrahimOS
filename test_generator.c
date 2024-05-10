@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
         pData.arrivaltime += rand() % (11); // processes arrives in order
         pData.runningtime = rand() % (30);
         pData.priority = rand() % (11);
-        pData.memsize = rand() % 512;
+        pData.memsize = rand() % 257;
         fprintf(pFile, "%d\t%d\t%d\t%d\t%d\n", pData.id, pData.arrivaltime, pData.runningtime, pData.priority, pData.memsize);
     }
     fclose(pFile);
